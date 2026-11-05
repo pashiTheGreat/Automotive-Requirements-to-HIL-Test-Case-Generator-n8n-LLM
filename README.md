@@ -1,5 +1,3 @@
-# utomotive-Requirements-to-HIL-Test-Case-Generator-n8n-LLM-
-
 # Automotive Requirements to HIL Test Cases (n8n + LLM)
 
 An [n8n](https://n8n.io) workflow that turns automotive requirement documents (PDF or plain text) into structured **Hardware-in-the-Loop (HIL) test cases**. It then checks the result for coverage gaps, fills them with a second LLM pass, and exports a traceability matrix, a CSV and a summary report.
