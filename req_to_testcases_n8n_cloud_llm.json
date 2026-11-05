@@ -1,0 +1,699 @@
+{
+  "name": "Automotive Requirements to HIL Test Cases (Cloud LLM)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "req-to-testcases",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "625cc5ec-0caf-49b0-975d-28dfe81c782d",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1000,
+        0
+      ],
+      "webhookId": "2fb75c66-1cb8-4661-a868-4f3bc95d6b05"
+    },
+    {
+      "parameters": {},
+      "id": "6931723f-9813-42de-aabc-f6de14ed6c5d",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1000,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4c9c269c-11bc-4fb7-a936-2b0eea15cf99",
+              "name": "document_text",
+              "value": "HIL Specification - Body Control Module (BCM), exterior lighting and door locks.\nECU: BCM. Network: CAN (500 kbit/s), LIN for ambient light sensor.\n\nREQ-BCM-001: When IgnSts is ON (2) and the ambient light AmbLight_lux is below 400 lux for more than 2 s, the BCM shall switch on the low-beam headlamps (HeadlampCmd = 1) within 300 ms. The headlamps shall be switched off when AmbLight_lux exceeds 800 lux for more than 5 s.\n\nREQ-BCM-002: If battery voltage VBatt is below 9.0 V or above 16.0 V, the BCM shall inhibit the daytime running light function (DrlEnable = 0) and store DTC 0xB1A01 within 500 ms. Safety level: ASIL A.\n\nREQ-BCM-003: When VehSpd_kph exceeds 10 km/h, the BCM shall lock all doors (DoorLockCmd = 1). If CrashSts = 1 the BCM shall unlock all doors (DoorLockCmd = 0) within 100 ms, overriding auto-lock. ASIL B. See also REQ-BCM-009.\n\nREQ-BCM-004: The BCM shall switch on the low-beam headlamps (HeadlampCmd = 1) within 300 ms if IgnSts is ON and AmbLight_lux drops below 400 lux for longer than 2 s.\n",
+              "type": "string"
+            },
+            {
+              "id": "e10e57ee-3c2c-4b55-a75a-8a5435cd4785",
+              "name": "source_name",
+              "value": "sample_bcm_spec.txt",
+              "type": "string"
+            },
+            {
+              "id": "4ccf009c-5378-407e-9ad3-9fe29ab57bd9",
+              "name": "signal_dictionary",
+              "value": "IgnSts, AmbLight_lux, HeadlampCmd, VBatt, DrlEnable, DtcB1A01, VehSpd_kph, DoorLockCmd, CrashSts",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3b38e6c8-bcc2-4d5f-9e08-44578ff0e291",
+      "name": "Sample Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -780,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "1c77aef8-500c-49fe-b136-4e2f73b892cc",
+              "leftValue": "={{ Object.keys($binary || {}).length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "eefd00b9-f118-493a-837c-c60715510de0",
+      "name": "Has File?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "c0040e2b-a7e9-4697-8362-9f614d45839d",
+      "name": "Extract From PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "let wb = {}, fname = '';\ntry { const w = $('Webhook').first(); wb = w.json.body || {}; fname = (w.binary && w.binary.data && w.binary.data.fileName) || ''; } catch (e) {}\nconst j = $input.first().json;\nconst text = String(j.text || j.document_text || wb.document_text || '');\nif (!text.trim()) throw new Error('No requirement text received. POST JSON {\"document_text\": \"...\"} or upload a PDF in multipart field \"data\".');\nconst source = j.source_name || wb.source_name || fname || (j.text ? 'uploaded_file' : 'inline_text');\nlet sigs = j.signal_dictionary || wb.signal_dictionary || [];\nif (typeof sigs === 'string') sigs = sigs.split(/[\\n,;]+/);\nsigs = sigs.map(s => String(s).trim()).filter(Boolean);\nconst clean = text.replace(/\\r\\n?/g, '\\n').replace(/([a-z])-\\n([a-z])/g, '$1$2').replace(/[ \\t]+/g, ' ').replace(/\\n{3,}/g, '\\n\\n');\nreturn [{ json: { source_name: source, document_text: clean, char_count: clean.length, signal_dictionary: sigs, provider: String(j.provider || wb.provider || '').trim(), model: String(j.model || wb.model || '').trim() } }];"
+      },
+      "id": "1cd0dd03-4b6c-4ac5-8386-7d8f719a8707",
+      "name": "Prepare Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -340,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "aad8a613-553b-4f55-b96f-274cc56a071a",
+              "name": "default_provider",
+              "value": "openai",
+              "type": "string"
+            },
+            {
+              "id": "a2795302-dcd1-450c-9185-e44ce59466ed",
+              "name": "default_model",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "7e8c30ea-1a86-4946-a0f3-ce76f0a609c0",
+              "name": "openai_api_key",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "97e3b895-b097-4a32-b74f-ef8fadb90bfa",
+              "name": "gemini_api_key",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "0ce20be9-9bac-4df3-9840-1611be555502",
+              "name": "xai_api_key",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "c1198b16-76b8-451d-9f66-8f370a111a0f",
+              "name": "groq_api_key",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "bc1b7818-df15-4ba0-8626-5410f5af6575",
+              "name": "mistral_api_key",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "3f2b882b-bc67-41b8-af74-53c318f0696f",
+              "name": "deepseek_api_key",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "ca010e9e-e7e1-4047-a613-099d6ac5d61c",
+              "name": "openrouter_api_key",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "42cd1643-cc84-4531-8810-fa91d7ade041",
+              "name": "custom_base_url",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "5836e4be-d2cd-4db3-8b61-e3f83b7bf1f7",
+              "name": "custom_api_key",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "46ca4fe8-bdcb-4845-8836-0c3746485db5",
+              "name": "req_id_pattern",
+              "value": "(?:REQ|SYS|SWR|SRS|HIL|FSR|TSR|SSR|CRS)[-_][A-Z0-9]+(?:[-_][A-Z0-9]+)*",
+              "type": "string"
+            },
+            {
+              "id": "3c12ad97-5d80-4350-9acc-97a5f5937b26",
+              "name": "dup_threshold",
+              "value": 0.8,
+              "type": "number"
+            },
+            {
+              "id": "e3e4a5ae-53d4-4517-ae5b-79307ceef306",
+              "name": "gap_fill_enabled",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "2bdd89a2-235d-4448-a7d2-1e74883a5ad5",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -120,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const cfg = $('Config').first().json;\nconst doc = $input.first().json;\nconst text = doc.document_text;\nconst idp = cfg.req_id_pattern;\nconst SYS = `You are a senior automotive test engineer (ISO 26262, ASPICE SYS.5, HIL testing). Convert ONE system requirement into structured data and HIL test cases.\nReturn ONLY a JSON object, no prose and no markdown, with this shape:\n{\n  \"title\": \"short title\",\n  \"requirement_type\": \"functional|timing|diagnostic|safety|performance|network|power\",\n  \"asil\": \"QM|A|B|C|D|UNKNOWN\",\n  \"ecu\": [\"ECU / function names\"],\n  \"operating_conditions\": [{\"name\": \"\", \"signal\": \"\", \"operator\": \"\", \"value\": \"\", \"unit\": \"\", \"description\": \"\"}],\n  \"signals\": [{\"name\": \"\", \"direction\": \"input|output|internal\", \"bus\": \"CAN|LIN|DIO|AIO|PWM|Ethernet|unknown\", \"unit\": \"\", \"min\": null, \"max\": null}],\n  \"expected_results\": [{\"description\": \"\", \"signal\": \"\", \"value\": \"\", \"tolerance\": \"\", \"timing_ms\": null}],\n  \"boundary_conditions\": [{\"signal\": \"\", \"parameter\": \"\", \"min\": null, \"max\": null, \"unit\": \"\", \"note\": \"\"}],\n  \"test_cases\": [ ...same objects as described below... ],\n  \"ambiguities\": [\"anything unclear, missing or contradictory in the requirement text\"]\n}\n\nEach element of \"test_cases\" has this shape:\n{\n  \"test_cases\": [{\n    \"title\": \"short imperative title\",\n    \"type\": \"positive|negative|boundary|timing|fault_injection\",\n    \"priority\": \"high|medium|low\",\n    \"preconditions\": [\"ignition=ON\", \"VBatt=13.5 V\"],\n    \"stimulus_steps\": [{\"signal\": \"exact signal name\", \"value\": \"value\", \"unit\": \"unit or empty\", \"wait_ms\": null}],\n    \"expected\": [{\"signal\": \"exact signal name\", \"value\": \"value\", \"tolerance\": \"e.g. +/-0.1 V or empty\", \"within_ms\": null}],\n    \"pass_criteria\": \"one measurable sentence\",\n    \"hil_notes\": \"fault-insertion method, delta used for boundaries, etc.\"\n  }]\n}\n\nRules:\n1. Use ONLY information in the requirement text, the document context and the signal dictionary. Never invent signals, thresholds, timings or DTC codes. Use null or \"\" when unknown and list the gap under \"ambiguities\".\n2. Use signal names exactly as written in the source (or in the signal dictionary when one is provided).\n3. operating_conditions = every precondition, state, mode or debounce that must hold (ignition state, speed, voltage, temperature, ...).\n4. boundary_conditions = every numeric limit in the text (min, max, threshold, hysteresis, debounce) with its unit.\n5. Test cases: at least one positive; one negative (condition not met, function must not act); for every numeric limit boundary tests at min-delta, min, max, max+delta (state the delta in hil_notes; if unknown use 1 LSB or 1% of range); a timing test for every time constraint; fault_injection tests (signal timeout, implausible value, out-of-range voltage, open/short) for safety or diagnostic requirements.\n6. Every test case needs concrete stimulus_steps and measurable expected results.`;\n\n// 1. deterministic requirement segmentation: an ID at the start of a line (or table row) opens a new requirement\nconst startRe = new RegExp('^[ \\\\t|]*[\\\\[(]?(' + idp + ')[\\\\])]?[ \\\\t|]*[:.\\\\-\\u2013\\u2014]?[ \\\\t|]*', 'gm');\nconst marks = []; let m;\nwhile ((m = startRe.exec(text)) !== null) {\n  marks.push({ id: m[1].toUpperCase(), start: m.index, bodyStart: m.index + m[0].length });\n  if (m[0].length === 0) startRe.lastIndex++;\n}\nconst refRe = new RegExp('\\\\b' + idp + '\\\\b', 'g');\nconst reqs = []; const seen = {};\nmarks.forEach((k, i) => {\n  const end = i + 1 < marks.length ? marks[i + 1].start : text.length;\n  const body = text.slice(k.bodyStart, end).trim();\n  seen[k.id] = (seen[k.id] || 0) + 1;\n  const refs = Array.from(new Set((body.match(refRe) || []).map(x => x.toUpperCase()))).filter(x => x !== k.id);\n  reqs.push({ req_id: k.id, req_key: seen[k.id] > 1 ? k.id + '#' + seen[k.id] : k.id, raw_text: body, references: refs, duplicate_id: seen[k.id] > 1, id_source: 'document' });\n});\n// duplicate IDs: flag the first occurrence too\nreqs.forEach(r => { if (seen[r.req_id] > 1) r.duplicate_id = true; });\nconst preamble = marks.length ? text.slice(0, marks[0].start).trim().slice(0, 2500) : '';\nif (!reqs.length) {   // fallback: no IDs found, chunk by paragraph and let the reviewer see it\n  let buf = '', n = 0;\n  const flush = () => { if (buf.trim()) { n++; const id = 'DOC-' + String(n).padStart(3, '0'); reqs.push({ req_id: id, req_key: id, raw_text: buf.trim(), references: [], duplicate_id: false, id_source: 'generated' }); } buf = ''; };\n  text.split(/\\n\\s*\\n/).forEach(p => { if ((buf + p).length > 3500) flush(); buf += p + '\\n\\n'; });\n  flush();\n}\nconst dict = (doc.signal_dictionary || []);\nreturn reqs.map(r => ({ json: {\n  ...r,\n  system_prompt: SYS,\n  user_prompt: 'Document context (ECU / system description, may be empty):\\n' + (preamble || '(none)') +\n    '\\n\\nSignal dictionary (use ONLY these signal names when the list is not empty):\\n' + (dict.length ? dict.join(', ') : '(none provided)') +\n    '\\n\\nRequirement ID: ' + r.req_id + '\\nRequirement text:\\n\"\"\"\\n' + r.raw_text + '\\n\"\"\"'\n} }));"
+      },
+      "id": "276c08a6-c28b-4ff0-8192-4c72175bec6b",
+      "name": "Split Requirements",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Resolve Provider').first().json.llm_base_url }}/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Resolve Provider').first().json.llm_api_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify(Object.assign({ model: $('Resolve Provider').first().json.model, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: $json.system_prompt }, { role: 'user', content: $json.user_prompt } ] }, $('Resolve Provider').first().json.send_temperature ? { temperature: 0 } : {})) }}",
+        "options": {
+          "timeout": 180000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
+            }
+          }
+        }
+      },
+      "id": "9a23472d-f436-48fe-8730-df8564fa9021",
+      "name": "LLM: Extract Test Cases",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        540,
+        140
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function arr(x){ return Array.isArray(x) ? x : (x === null || x === undefined || x === '' ? [] : [x]); }\nfunction str(x){ return x === null || x === undefined ? '' : String(x).trim(); }\nfunction num(x){ if (x === null || x === undefined || x === '') return null; const n = Number(x); return Number.isFinite(n) ? n : null; }\nfunction obj(x, key){ return (x && typeof x === 'object' && !Array.isArray(x)) ? x : { [key]: str(x) }; }\nfunction canonType(t){\n  t = str(t).toLowerCase();\n  if (/fault|inject|diag|robust|stuck|short|open.?circ|timeout/.test(t)) return 'fault_injection';\n  if (/bound|limit|edge/.test(t)) return 'boundary';\n  if (/tim|latenc|response/.test(t)) return 'timing';\n  if (/neg|invalid|inhibit/.test(t)) return 'negative';\n  return 'positive';\n}\nfunction normTC(t){\n  t = obj(t, 'title');\n  return {\n    title: str(t.title), type: canonType(t.type), priority: str(t.priority).toLowerCase() || 'medium',\n    preconditions: arr(t.preconditions).map(p => typeof p === 'object' ? JSON.stringify(p) : str(p)).filter(Boolean),\n    stimulus: arr(t.stimulus_steps || t.stimulus).map(s => { s = obj(s, 'signal'); return { signal: str(s.signal), value: str(s.value), unit: str(s.unit), wait_ms: num(s.wait_ms) }; }),\n    expected: arr(t.expected).map(e => { e = obj(e, 'signal'); return { signal: str(e.signal), value: str(e.value), tolerance: str(e.tolerance), within_ms: num(e.within_ms) }; }),\n    pass_criteria: str(t.pass_criteria), hil_notes: str(t.hil_notes)\n  };\n}\nfunction normaliseExtraction(o){\n  o = (o && typeof o === 'object') ? o : {};\n  return {\n    title: str(o.title),\n    requirement_type: str(o.requirement_type).toLowerCase() || 'functional',\n    asil: (str(o.asil).toUpperCase().replace('ASIL', '').replace(/[-_ ]/g, '')) || 'UNKNOWN',\n    ecu: arr(o.ecu).map(str).filter(Boolean),\n    operating_conditions: arr(o.operating_conditions).map(c => { c = obj(c, 'description'); return { name: str(c.name), signal: str(c.signal), operator: str(c.operator), value: str(c.value), unit: str(c.unit), description: str(c.description) }; }),\n    signals: arr(o.signals).map(s => { s = obj(s, 'name'); return { name: str(s.name), direction: str(s.direction).toLowerCase(), bus: str(s.bus || s.type), unit: str(s.unit), min: num(s.min), max: num(s.max) }; }).filter(s => s.name),\n    expected_results: arr(o.expected_results).map(e => { e = obj(e, 'description'); return { description: str(e.description), signal: str(e.signal), value: str(e.value), tolerance: str(e.tolerance), timing_ms: num(e.timing_ms) }; }),\n    boundary_conditions: arr(o.boundary_conditions).map(b => { b = obj(b, 'note'); return { signal: str(b.signal), parameter: str(b.parameter), min: num(b.min), max: num(b.max), unit: str(b.unit), note: str(b.note) }; }),\n    test_cases: arr(o.test_cases).map(normTC),\n    ambiguities: arr(o.ambiguities).map(str).filter(Boolean)\n  };\n}\nfunction parseJsonLoose(content){\n  const s = String(content).replace(/^\\s*```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\n  try { return JSON.parse(s); } catch (e) {\n    const a = s.indexOf('{'), b = s.lastIndexOf('}');\n    if (a < 0 || b <= a) throw new Error('No JSON object found in LLM output');\n    return JSON.parse(s.slice(a, b + 1));\n  }\n}\nfunction llmContent(item){\n  const j = item.json;\n  if (j.error) throw new Error('LLM call failed: ' + (typeof j.error === 'string' ? j.error : (j.error.message || JSON.stringify(j.error))).slice(0, 300));\n  const c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;\n  if (!c) throw new Error('Empty LLM response');\n  return c;\n}\n\nconst items = $input.all();\nconst src = $('Split Requirements').all();\nconst out = [];\nitems.forEach((it, i) => {\n  const s = src[i].json;\n  const base = { req_id: s.req_key, req_text: s.raw_text, references: s.references, id_source: s.id_source, duplicate_id: !!s.duplicate_id, parse_ok: false, errors: [] };\n  try {\n    const ex = normaliseExtraction(parseJsonLoose(llmContent(it)));\n    out.push({ json: { ...base, parse_ok: true, extraction: ex } });\n  } catch (e) {\n    out.push({ json: { ...base, errors: [e.message], extraction: normaliseExtraction({}) } });\n  }\n});\nreturn out;"
+      },
+      "id": "83a50512-3a49-40ba-bcff-307e693c351d",
+      "name": "Parse LLM Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function arr(x){ return Array.isArray(x) ? x : (x === null || x === undefined || x === '' ? [] : [x]); }\nfunction str(x){ return x === null || x === undefined ? '' : String(x).trim(); }\nfunction num(x){ if (x === null || x === undefined || x === '') return null; const n = Number(x); return Number.isFinite(n) ? n : null; }\nfunction obj(x, key){ return (x && typeof x === 'object' && !Array.isArray(x)) ? x : { [key]: str(x) }; }\nfunction canonType(t){\n  t = str(t).toLowerCase();\n  if (/fault|inject|diag|robust|stuck|short|open.?circ|timeout/.test(t)) return 'fault_injection';\n  if (/bound|limit|edge/.test(t)) return 'boundary';\n  if (/tim|latenc|response/.test(t)) return 'timing';\n  if (/neg|invalid|inhibit/.test(t)) return 'negative';\n  return 'positive';\n}\nfunction normTC(t){\n  t = obj(t, 'title');\n  return {\n    title: str(t.title), type: canonType(t.type), priority: str(t.priority).toLowerCase() || 'medium',\n    preconditions: arr(t.preconditions).map(p => typeof p === 'object' ? JSON.stringify(p) : str(p)).filter(Boolean),\n    stimulus: arr(t.stimulus_steps || t.stimulus).map(s => { s = obj(s, 'signal'); return { signal: str(s.signal), value: str(s.value), unit: str(s.unit), wait_ms: num(s.wait_ms) }; }),\n    expected: arr(t.expected).map(e => { e = obj(e, 'signal'); return { signal: str(e.signal), value: str(e.value), tolerance: str(e.tolerance), within_ms: num(e.within_ms) }; }),\n    pass_criteria: str(t.pass_criteria), hil_notes: str(t.hil_notes)\n  };\n}\nfunction normaliseExtraction(o){\n  o = (o && typeof o === 'object') ? o : {};\n  return {\n    title: str(o.title),\n    requirement_type: str(o.requirement_type).toLowerCase() || 'functional',\n    asil: (str(o.asil).toUpperCase().replace('ASIL', '').replace(/[-_ ]/g, '')) || 'UNKNOWN',\n    ecu: arr(o.ecu).map(str).filter(Boolean),\n    operating_conditions: arr(o.operating_conditions).map(c => { c = obj(c, 'description'); return { name: str(c.name), signal: str(c.signal), operator: str(c.operator), value: str(c.value), unit: str(c.unit), description: str(c.description) }; }),\n    signals: arr(o.signals).map(s => { s = obj(s, 'name'); return { name: str(s.name), direction: str(s.direction).toLowerCase(), bus: str(s.bus || s.type), unit: str(s.unit), min: num(s.min), max: num(s.max) }; }).filter(s => s.name),\n    expected_results: arr(o.expected_results).map(e => { e = obj(e, 'description'); return { description: str(e.description), signal: str(e.signal), value: str(e.value), tolerance: str(e.tolerance), timing_ms: num(e.timing_ms) }; }),\n    boundary_conditions: arr(o.boundary_conditions).map(b => { b = obj(b, 'note'); return { signal: str(b.signal), parameter: str(b.parameter), min: num(b.min), max: num(b.max), unit: str(b.unit), note: str(b.note) }; }),\n    test_cases: arr(o.test_cases).map(normTC),\n    ambiguities: arr(o.ambiguities).map(str).filter(Boolean)\n  };\n}\nfunction parseJsonLoose(content){\n  const s = String(content).replace(/^\\s*```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\n  try { return JSON.parse(s); } catch (e) {\n    const a = s.indexOf('{'), b = s.lastIndexOf('}');\n    if (a < 0 || b <= a) throw new Error('No JSON object found in LLM output');\n    return JSON.parse(s.slice(a, b + 1));\n  }\n}\nfunction llmContent(item){\n  const j = item.json;\n  if (j.error) throw new Error('LLM call failed: ' + (typeof j.error === 'string' ? j.error : (j.error.message || JSON.stringify(j.error))).slice(0, 300));\n  const c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;\n  if (!c) throw new Error('Empty LLM response');\n  return c;\n}\n\nfunction normTok(s){ return String(s === null || s === undefined ? '' : s).toLowerCase().replace(/\\s+/g, '').replace(/[^a-z0-9_.\\-+<>=!]/g, ''); }\nfunction pairSet(tc){\n  const s = new Set();\n  tc.stimulus.forEach(x => s.add('s:' + normTok(x.signal) + '=' + normTok(x.value)));\n  tc.expected.forEach(x => s.add('e:' + normTok(x.signal) + '=' + normTok(x.value)));\n  return s;\n}\nfunction jaccard(a, b){ if (!a.size || !b.size) return 0; let i = 0; a.forEach(x => { if (b.has(x)) i++; }); return i / (a.size + b.size - i); }\nfunction flatten(reqs){\n  const out = [];\n  reqs.forEach(r => r.extraction.test_cases.forEach((t, i) => out.push({\n    ...t, tc_id: 'TC-' + r.req_id + '-' + String(i + 1).padStart(2, '0'), seq: i + 1, req_id: r.req_id,\n    origin: 'extracted', ecu: r.extraction.ecu.join('/'), req_type: r.extraction.requirement_type, asil: r.extraction.asil\n  })));\n  return out;\n}\nconst FILLABLE = new Set(['no_test_case', 'missing_positive_case', 'missing_negative_case', 'boundary_not_covered', 'timing_not_verified', 'missing_fault_injection', 'expected_result_not_checked', 'operating_condition_not_exercised']);\nconst SEV_RANK = { high: 0, medium: 1, low: 2 };\n\nfunction analyze(reqs, tcsIn, opts){\n  const tcs = tcsIn.map(t => ({ ...t, flags: [], status: 'draft', duplicate_of: null, shared_with: [] }));\n  const gaps = [], dups = [];\n  const addGap = (req_id, check, severity, detail, hint) => gaps.push({ req_id, check, severity, detail, hint: hint || '', fillable: FILLABLE.has(check) });\n  const dict = new Set((opts.signalDictionary || []).map(normTok));\n\n  // 1. duplicate detection (same requirement => duplicate, other requirement => shared/overlap)\n  const sets = tcs.map(pairSet);\n  for (let j = 0; j < tcs.length; j++) {\n    for (let i = 0; i < j; i++) {\n      if (tcs[i].duplicate_of) continue;\n      if (Math.min(sets[i].size, sets[j].size) < 2) continue;\n      const sim = jaccard(sets[i], sets[j]);\n      if (sim < opts.dupThreshold) continue;\n      const same = tcs[i].req_id === tcs[j].req_id;\n      dups.push({ tc_id: tcs[j].tc_id, matches: tcs[i].tc_id, similarity: +sim.toFixed(2), scope: same ? 'same_requirement' : 'cross_requirement' });\n      if (same) { tcs[j].duplicate_of = tcs[i].tc_id; tcs[j].status = 'duplicate'; tcs[j].flags.push('duplicate'); break; }\n      tcs[j].shared_with.push(tcs[i].tc_id);\n    }\n  }\n  const active = tcs.filter(t => !t.duplicate_of);\n  const byReq = {}; active.forEach(t => (byReq[t.req_id] = byReq[t.req_id] || []).push(t));\n  const reqById = {}; reqs.forEach(r => reqById[r.req_id] = r);\n  const definedIds = new Set(reqs.map(r => r.req_id.split('#')[0]));\n  const eq = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));\n  const C = { eoTotal: 0, eoMiss: 0, bTotal: 0, bMiss: 0, condTotal: 0, condMiss: 0 };\n\n  // 2. requirement-level checks\n  reqs.forEach(r => {\n    const id = r.req_id, ex = r.extraction, mine = byReq[id] || [];\n    if (!r.parse_ok) addGap(id, 'extraction_failed', 'high', (r.errors || []).join('; ') || 'LLM output could not be parsed', 'Re-run extraction for this requirement');\n    if (r.duplicate_id) addGap(id, 'duplicate_requirement_id', 'medium', 'Requirement ID occurs more than once in the source document', 'Check the document for copy/paste errors');\n    (r.references || []).forEach(ref => { if (!definedIds.has(ref)) addGap(id, 'undefined_reference', 'low', 'References ' + ref + ', which is not defined in this document', ''); });\n    if (ex.ambiguities.length) addGap(id, 'ambiguity', 'low', ex.ambiguities.join(' | '), 'Clarify with the requirement owner');\n    if (!mine.length) { if (r.parse_ok || !(r.errors || []).length) addGap(id, 'no_test_case', 'high', 'No active test case traces to this requirement', 'Add at least one positive and one negative test'); return; }\n\n    const types = new Set(mine.map(t => t.type));\n    const hasSig = (t, name) => t.stimulus.some(s => normTok(s.signal) === normTok(name));\n    if (!types.has('positive')) addGap(id, 'missing_positive_case', 'medium', 'No positive (nominal) test case', 'Add nominal-path test');\n    if (ex.operating_conditions.length) {\n      C.condTotal++;\n      if (!types.has('negative')) { C.condMiss++; addGap(id, 'missing_negative_case', 'medium', 'Operating conditions exist but no negative test (condition violated, function must not act)', 'Add a test that violates each operating condition'); }\n      ex.operating_conditions.forEach(c => {\n        if (!c.signal) return;\n        const ok = mine.some(t => hasSig(t, c.signal) || t.preconditions.some(p => normTok(p).includes(normTok(c.signal))));\n        if (!ok) addGap(id, 'operating_condition_not_exercised', 'medium', 'Condition on ' + c.signal + ' is never set or varied by any test', 'Drive ' + c.signal + ' inside and outside the condition');\n      });\n    }\n    ex.boundary_conditions.forEach(b => {\n      if (b.min === null && b.max === null) return;\n      if (!b.signal) { addGap(id, 'boundary_signal_unspecified', 'low', 'Limit ' + (b.parameter || '') + ' has no associated signal', ''); return; }\n      C.bTotal++;\n      const vals = [];\n      mine.forEach(t => t.stimulus.forEach(s => { if (normTok(s.signal) === normTok(b.signal)) { const n = parseFloat(s.value); if (Number.isFinite(n)) vals.push(n); } }));\n      const miss = [];\n      if (b.min !== null) { if (!vals.some(v => eq(v, b.min))) miss.push('value at min (' + b.min + ')'); if (!vals.some(v => v < b.min && !eq(v, b.min))) miss.push('value below min'); }\n      if (b.max !== null) { if (!vals.some(v => eq(v, b.max))) miss.push('value at max (' + b.max + ')'); if (!vals.some(v => v > b.max && !eq(v, b.max))) miss.push('value above max'); }\n      if (miss.length) { C.bMiss++; addGap(id, 'boundary_not_covered', 'medium', b.signal + (b.unit ? ' [' + b.unit + ']' : '') + ': missing ' + miss.join(', '), 'Add boundary tests for ' + b.signal); }\n    });\n    const needsTiming = ex.requirement_type === 'timing' || ex.expected_results.some(e => e.timing_ms !== null);\n    if (needsTiming && !mine.some(t => t.type === 'timing' || t.expected.some(e => e.within_ms !== null))) addGap(id, 'timing_not_verified', 'medium', 'Timing constraint present but no test measures response time', 'Add test with a measured within_ms limit');\n    const safety = ['A', 'B', 'C', 'D'].includes(ex.asil) || ['safety', 'diagnostic'].includes(ex.requirement_type);\n    if (safety && !types.has('fault_injection')) addGap(id, 'missing_fault_injection', ['B', 'C', 'D'].includes(ex.asil) ? 'high' : 'medium', 'Safety/diagnostic requirement (ASIL ' + ex.asil + ') has no fault-injection test', 'Add signal timeout, implausible value, out-of-range voltage, open/short tests');\n    ex.expected_results.forEach(e => {\n      if (!e.signal) return; C.eoTotal++;\n      if (!mine.some(t => t.expected.some(x => normTok(x.signal) === normTok(e.signal)))) { C.eoMiss++; addGap(id, 'expected_result_not_checked', 'medium', 'No test checks the expected output on ' + e.signal, 'Assert ' + e.signal + ' in at least one test'); }\n    });\n    ex.signals.forEach(s => {\n      if (!mine.some(t => t.stimulus.concat(t.expected).some(x => normTok(x.signal) === normTok(s.name)))) addGap(id, 'signal_not_exercised', 'low', 'Signal ' + s.name + ' is declared but not used by any test', '');\n    });\n  });\n\n  // 3. test-case integrity\n  active.forEach(t => {\n    const r = reqById[t.req_id];\n    const declared = new Set();\n    if (r) { const ex = r.extraction; ex.signals.forEach(s => declared.add(normTok(s.name))); ex.operating_conditions.forEach(c => c.signal && declared.add(normTok(c.signal))); ex.expected_results.forEach(e => e.signal && declared.add(normTok(e.signal))); ex.boundary_conditions.forEach(b => b.signal && declared.add(normTok(b.signal))); }\n    if (!t.expected.length) t.flags.push('no_expected_result');\n    if (!t.stimulus.length && !t.preconditions.length) t.flags.push('no_stimulus_or_precondition');\n    t.stimulus.concat(t.expected).forEach(x => {\n      if (!x.signal) { t.flags.push('step_without_signal'); return; }\n      const k = normTok(x.signal);\n      if (dict.size) { if (!dict.has(k)) t.flags.push('signal_not_in_dictionary:' + x.signal); }\n      else if (declared.size && !declared.has(k)) t.flags.push('signal_not_in_requirement:' + x.signal);\n    });\n    t.flags = Array.from(new Set(t.flags));\n    if (t.flags.length) addGap(t.req_id, 'test_case_quality', t.flags.some(f => f.startsWith('no_expected') || f.startsWith('signal_not_in_dictionary')) ? 'high' : 'medium', t.tc_id + ': ' + t.flags.join(', '), 'Review / fix this test case');\n  });\n\n  gaps.sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity]);\n  const pct = (t, m) => t ? Math.round(100 * (t - m) / t) : null;\n  const covered = reqs.filter(r => (byReq[r.req_id] || []).length > 0).length;\n  const metrics = {\n    requirements: reqs.length, test_cases_total: tcs.length, test_cases_active: active.length, duplicates_removed: tcs.length - active.length,\n    requirement_coverage_pct: pct(reqs.length, reqs.length - covered),\n    expected_result_coverage_pct: pct(C.eoTotal, C.eoMiss),\n    boundary_coverage_pct: pct(C.bTotal, C.bMiss),\n    negative_case_coverage_pct: pct(C.condTotal, C.condMiss),\n    gaps_high: gaps.filter(g => g.severity === 'high').length, gaps_medium: gaps.filter(g => g.severity === 'medium').length, gaps_low: gaps.filter(g => g.severity === 'low').length\n  };\n  const traceability = reqs.map(r => { const m = byReq[r.req_id] || []; return { req_id: r.req_id, title: r.extraction.title, type: r.extraction.requirement_type, asil: r.extraction.asil, test_cases: m.map(t => t.tc_id), test_types: Array.from(new Set(m.map(t => t.type))) }; });\n  return { test_cases: tcs, gaps, duplicates: dups, metrics, traceability };\n}\n\nconst cfg = $('Config').first().json;\nconst doc = $('Prepare Input').first().json;\nconst reqs = $input.all().map(i => i.json);\nconst result = analyze(reqs, flatten(reqs), { dupThreshold: Number(cfg.dup_threshold) || 0.8, signalDictionary: doc.signal_dictionary || [] });\nconst fillable = result.gaps.filter(g => g.fillable && g.severity !== 'low').length;\nreturn [{ json: {\n  source_name: doc.source_name, requirements: reqs, ...result,\n  fillable_gaps: fillable,\n  gap_fill_enabled: cfg.gap_fill_enabled === true || cfg.gap_fill_enabled === 'true'\n} }];"
+      },
+      "id": "7514f4d3-ef49-4265-b237-e54b3fe889b0",
+      "name": "Analyze",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "70dbf6dc-065f-40ec-8e84-c2874dd32544",
+              "leftValue": "={{ Boolean($json.gap_fill_enabled && $json.fillable_gaps > 0) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "de959475-a2fa-42b2-9601-4077245b4d50",
+      "name": "Gaps to Fill?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const a = $input.first().json;\nconst doc = $('Prepare Input').first().json;\nconst SYS = `You are a senior automotive HIL test engineer. You receive one requirement, its extracted structure, the test cases that already exist and a list of coverage gaps.\nReturn ONLY a JSON object: {\"test_cases\": [...]} containing the ADDITIONAL test cases needed to close those gaps. Do not repeat existing test cases. Use only signals that appear in the extraction or signal dictionary and never invent thresholds. Each test case uses this shape:\n{\n  \"test_cases\": [{\n    \"title\": \"short imperative title\",\n    \"type\": \"positive|negative|boundary|timing|fault_injection\",\n    \"priority\": \"high|medium|low\",\n    \"preconditions\": [\"ignition=ON\", \"VBatt=13.5 V\"],\n    \"stimulus_steps\": [{\"signal\": \"exact signal name\", \"value\": \"value\", \"unit\": \"unit or empty\", \"wait_ms\": null}],\n    \"expected\": [{\"signal\": \"exact signal name\", \"value\": \"value\", \"tolerance\": \"e.g. +/-0.1 V or empty\", \"within_ms\": null}],\n    \"pass_criteria\": \"one measurable sentence\",\n    \"hil_notes\": \"fault-insertion method, delta used for boundaries, etc.\"\n  }]\n}\nBoundary tests must drive the signal to min-delta, min, max and max+delta as required by the gap text.`;\nconst byReq = {};\na.gaps.filter(g => g.fillable && g.severity !== 'low').forEach(g => (byReq[g.req_id] = byReq[g.req_id] || []).push(g));\nconst out = [];\nObject.keys(byReq).forEach(id => {\n  const r = a.requirements.find(x => x.req_id === id);\n  if (!r || !r.parse_ok) return;   // nothing reliable to build on\n  const ex = r.extraction;\n  const existing = a.test_cases.filter(t => t.req_id === id && !t.duplicate_of).map(t => ({\n    id: t.tc_id, title: t.title, type: t.type,\n    stimulus: t.stimulus.map(s => s.signal + '=' + s.value), expected: t.expected.map(e => e.signal + '=' + e.value)\n  }));\n  const user = 'Requirement ' + id + ':\\n\"\"\"\\n' + r.req_text + '\\n\"\"\"\\n\\nExtracted structure:\\n' +\n    JSON.stringify({ type: ex.requirement_type, asil: ex.asil, signals: ex.signals, operating_conditions: ex.operating_conditions, boundary_conditions: ex.boundary_conditions, expected_results: ex.expected_results }) +\n    '\\n\\nSignal dictionary: ' + ((doc.signal_dictionary || []).join(', ') || '(none)') +\n    '\\n\\nExisting test cases:\\n' + JSON.stringify(existing) +\n    '\\n\\nGaps to close:\\n' + byReq[id].map(g => '- [' + g.check + '] ' + g.detail).join('\\n');\n  out.push({ json: { req_id: id, system_prompt: SYS, user_prompt: user } });\n});\nreturn out;"
+      },
+      "id": "392145fe-abe7-43c3-befe-2b484903d23d",
+      "name": "Build Gap Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Resolve Provider').first().json.llm_base_url }}/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Resolve Provider').first().json.llm_api_key }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify(Object.assign({ model: $('Resolve Provider').first().json.model, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: $json.system_prompt }, { role: 'user', content: $json.user_prompt } ] }, $('Resolve Provider').first().json.send_temperature ? { temperature: 0 } : {})) }}",
+        "options": {
+          "timeout": 180000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
+            }
+          }
+        }
+      },
+      "id": "1cfd1ccf-de7c-4a9a-8b10-6741dd093e14",
+      "name": "LLM: Fill Gaps",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1640,
+        20
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function arr(x){ return Array.isArray(x) ? x : (x === null || x === undefined || x === '' ? [] : [x]); }\nfunction str(x){ return x === null || x === undefined ? '' : String(x).trim(); }\nfunction num(x){ if (x === null || x === undefined || x === '') return null; const n = Number(x); return Number.isFinite(n) ? n : null; }\nfunction obj(x, key){ return (x && typeof x === 'object' && !Array.isArray(x)) ? x : { [key]: str(x) }; }\nfunction canonType(t){\n  t = str(t).toLowerCase();\n  if (/fault|inject|diag|robust|stuck|short|open.?circ|timeout/.test(t)) return 'fault_injection';\n  if (/bound|limit|edge/.test(t)) return 'boundary';\n  if (/tim|latenc|response/.test(t)) return 'timing';\n  if (/neg|invalid|inhibit/.test(t)) return 'negative';\n  return 'positive';\n}\nfunction normTC(t){\n  t = obj(t, 'title');\n  return {\n    title: str(t.title), type: canonType(t.type), priority: str(t.priority).toLowerCase() || 'medium',\n    preconditions: arr(t.preconditions).map(p => typeof p === 'object' ? JSON.stringify(p) : str(p)).filter(Boolean),\n    stimulus: arr(t.stimulus_steps || t.stimulus).map(s => { s = obj(s, 'signal'); return { signal: str(s.signal), value: str(s.value), unit: str(s.unit), wait_ms: num(s.wait_ms) }; }),\n    expected: arr(t.expected).map(e => { e = obj(e, 'signal'); return { signal: str(e.signal), value: str(e.value), tolerance: str(e.tolerance), within_ms: num(e.within_ms) }; }),\n    pass_criteria: str(t.pass_criteria), hil_notes: str(t.hil_notes)\n  };\n}\nfunction normaliseExtraction(o){\n  o = (o && typeof o === 'object') ? o : {};\n  return {\n    title: str(o.title),\n    requirement_type: str(o.requirement_type).toLowerCase() || 'functional',\n    asil: (str(o.asil).toUpperCase().replace('ASIL', '').replace(/[-_ ]/g, '')) || 'UNKNOWN',\n    ecu: arr(o.ecu).map(str).filter(Boolean),\n    operating_conditions: arr(o.operating_conditions).map(c => { c = obj(c, 'description'); return { name: str(c.name), signal: str(c.signal), operator: str(c.operator), value: str(c.value), unit: str(c.unit), description: str(c.description) }; }),\n    signals: arr(o.signals).map(s => { s = obj(s, 'name'); return { name: str(s.name), direction: str(s.direction).toLowerCase(), bus: str(s.bus || s.type), unit: str(s.unit), min: num(s.min), max: num(s.max) }; }).filter(s => s.name),\n    expected_results: arr(o.expected_results).map(e => { e = obj(e, 'description'); return { description: str(e.description), signal: str(e.signal), value: str(e.value), tolerance: str(e.tolerance), timing_ms: num(e.timing_ms) }; }),\n    boundary_conditions: arr(o.boundary_conditions).map(b => { b = obj(b, 'note'); return { signal: str(b.signal), parameter: str(b.parameter), min: num(b.min), max: num(b.max), unit: str(b.unit), note: str(b.note) }; }),\n    test_cases: arr(o.test_cases).map(normTC),\n    ambiguities: arr(o.ambiguities).map(str).filter(Boolean)\n  };\n}\nfunction parseJsonLoose(content){\n  const s = String(content).replace(/^\\s*```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\n  try { return JSON.parse(s); } catch (e) {\n    const a = s.indexOf('{'), b = s.lastIndexOf('}');\n    if (a < 0 || b <= a) throw new Error('No JSON object found in LLM output');\n    return JSON.parse(s.slice(a, b + 1));\n  }\n}\nfunction llmContent(item){\n  const j = item.json;\n  if (j.error) throw new Error('LLM call failed: ' + (typeof j.error === 'string' ? j.error : (j.error.message || JSON.stringify(j.error))).slice(0, 300));\n  const c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;\n  if (!c) throw new Error('Empty LLM response');\n  return c;\n}\n\nconst items = $input.all();\nconst src = $('Build Gap Prompts').all();\nreturn items.map((it, i) => {\n  const id = src[i].json.req_id;\n  try {\n    const o = parseJsonLoose(llmContent(it));\n    return { json: { req_id: id, ok: true, test_cases: arr(o.test_cases).map(normTC) } };\n  } catch (e) { return { json: { req_id: id, ok: false, error: e.message, test_cases: [] } }; }\n});"
+      },
+      "id": "981b13c3-2631-4984-a994-e7fd35a5ff52",
+      "name": "Parse Gap Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1860,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function normTok(s){ return String(s === null || s === undefined ? '' : s).toLowerCase().replace(/\\s+/g, '').replace(/[^a-z0-9_.\\-+<>=!]/g, ''); }\nfunction pairSet(tc){\n  const s = new Set();\n  tc.stimulus.forEach(x => s.add('s:' + normTok(x.signal) + '=' + normTok(x.value)));\n  tc.expected.forEach(x => s.add('e:' + normTok(x.signal) + '=' + normTok(x.value)));\n  return s;\n}\nfunction jaccard(a, b){ if (!a.size || !b.size) return 0; let i = 0; a.forEach(x => { if (b.has(x)) i++; }); return i / (a.size + b.size - i); }\nfunction flatten(reqs){\n  const out = [];\n  reqs.forEach(r => r.extraction.test_cases.forEach((t, i) => out.push({\n    ...t, tc_id: 'TC-' + r.req_id + '-' + String(i + 1).padStart(2, '0'), seq: i + 1, req_id: r.req_id,\n    origin: 'extracted', ecu: r.extraction.ecu.join('/'), req_type: r.extraction.requirement_type, asil: r.extraction.asil\n  })));\n  return out;\n}\nconst FILLABLE = new Set(['no_test_case', 'missing_positive_case', 'missing_negative_case', 'boundary_not_covered', 'timing_not_verified', 'missing_fault_injection', 'expected_result_not_checked', 'operating_condition_not_exercised']);\nconst SEV_RANK = { high: 0, medium: 1, low: 2 };\n\nfunction analyze(reqs, tcsIn, opts){\n  const tcs = tcsIn.map(t => ({ ...t, flags: [], status: 'draft', duplicate_of: null, shared_with: [] }));\n  const gaps = [], dups = [];\n  const addGap = (req_id, check, severity, detail, hint) => gaps.push({ req_id, check, severity, detail, hint: hint || '', fillable: FILLABLE.has(check) });\n  const dict = new Set((opts.signalDictionary || []).map(normTok));\n\n  // 1. duplicate detection (same requirement => duplicate, other requirement => shared/overlap)\n  const sets = tcs.map(pairSet);\n  for (let j = 0; j < tcs.length; j++) {\n    for (let i = 0; i < j; i++) {\n      if (tcs[i].duplicate_of) continue;\n      if (Math.min(sets[i].size, sets[j].size) < 2) continue;\n      const sim = jaccard(sets[i], sets[j]);\n      if (sim < opts.dupThreshold) continue;\n      const same = tcs[i].req_id === tcs[j].req_id;\n      dups.push({ tc_id: tcs[j].tc_id, matches: tcs[i].tc_id, similarity: +sim.toFixed(2), scope: same ? 'same_requirement' : 'cross_requirement' });\n      if (same) { tcs[j].duplicate_of = tcs[i].tc_id; tcs[j].status = 'duplicate'; tcs[j].flags.push('duplicate'); break; }\n      tcs[j].shared_with.push(tcs[i].tc_id);\n    }\n  }\n  const active = tcs.filter(t => !t.duplicate_of);\n  const byReq = {}; active.forEach(t => (byReq[t.req_id] = byReq[t.req_id] || []).push(t));\n  const reqById = {}; reqs.forEach(r => reqById[r.req_id] = r);\n  const definedIds = new Set(reqs.map(r => r.req_id.split('#')[0]));\n  const eq = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));\n  const C = { eoTotal: 0, eoMiss: 0, bTotal: 0, bMiss: 0, condTotal: 0, condMiss: 0 };\n\n  // 2. requirement-level checks\n  reqs.forEach(r => {\n    const id = r.req_id, ex = r.extraction, mine = byReq[id] || [];\n    if (!r.parse_ok) addGap(id, 'extraction_failed', 'high', (r.errors || []).join('; ') || 'LLM output could not be parsed', 'Re-run extraction for this requirement');\n    if (r.duplicate_id) addGap(id, 'duplicate_requirement_id', 'medium', 'Requirement ID occurs more than once in the source document', 'Check the document for copy/paste errors');\n    (r.references || []).forEach(ref => { if (!definedIds.has(ref)) addGap(id, 'undefined_reference', 'low', 'References ' + ref + ', which is not defined in this document', ''); });\n    if (ex.ambiguities.length) addGap(id, 'ambiguity', 'low', ex.ambiguities.join(' | '), 'Clarify with the requirement owner');\n    if (!mine.length) { if (r.parse_ok || !(r.errors || []).length) addGap(id, 'no_test_case', 'high', 'No active test case traces to this requirement', 'Add at least one positive and one negative test'); return; }\n\n    const types = new Set(mine.map(t => t.type));\n    const hasSig = (t, name) => t.stimulus.some(s => normTok(s.signal) === normTok(name));\n    if (!types.has('positive')) addGap(id, 'missing_positive_case', 'medium', 'No positive (nominal) test case', 'Add nominal-path test');\n    if (ex.operating_conditions.length) {\n      C.condTotal++;\n      if (!types.has('negative')) { C.condMiss++; addGap(id, 'missing_negative_case', 'medium', 'Operating conditions exist but no negative test (condition violated, function must not act)', 'Add a test that violates each operating condition'); }\n      ex.operating_conditions.forEach(c => {\n        if (!c.signal) return;\n        const ok = mine.some(t => hasSig(t, c.signal) || t.preconditions.some(p => normTok(p).includes(normTok(c.signal))));\n        if (!ok) addGap(id, 'operating_condition_not_exercised', 'medium', 'Condition on ' + c.signal + ' is never set or varied by any test', 'Drive ' + c.signal + ' inside and outside the condition');\n      });\n    }\n    ex.boundary_conditions.forEach(b => {\n      if (b.min === null && b.max === null) return;\n      if (!b.signal) { addGap(id, 'boundary_signal_unspecified', 'low', 'Limit ' + (b.parameter || '') + ' has no associated signal', ''); return; }\n      C.bTotal++;\n      const vals = [];\n      mine.forEach(t => t.stimulus.forEach(s => { if (normTok(s.signal) === normTok(b.signal)) { const n = parseFloat(s.value); if (Number.isFinite(n)) vals.push(n); } }));\n      const miss = [];\n      if (b.min !== null) { if (!vals.some(v => eq(v, b.min))) miss.push('value at min (' + b.min + ')'); if (!vals.some(v => v < b.min && !eq(v, b.min))) miss.push('value below min'); }\n      if (b.max !== null) { if (!vals.some(v => eq(v, b.max))) miss.push('value at max (' + b.max + ')'); if (!vals.some(v => v > b.max && !eq(v, b.max))) miss.push('value above max'); }\n      if (miss.length) { C.bMiss++; addGap(id, 'boundary_not_covered', 'medium', b.signal + (b.unit ? ' [' + b.unit + ']' : '') + ': missing ' + miss.join(', '), 'Add boundary tests for ' + b.signal); }\n    });\n    const needsTiming = ex.requirement_type === 'timing' || ex.expected_results.some(e => e.timing_ms !== null);\n    if (needsTiming && !mine.some(t => t.type === 'timing' || t.expected.some(e => e.within_ms !== null))) addGap(id, 'timing_not_verified', 'medium', 'Timing constraint present but no test measures response time', 'Add test with a measured within_ms limit');\n    const safety = ['A', 'B', 'C', 'D'].includes(ex.asil) || ['safety', 'diagnostic'].includes(ex.requirement_type);\n    if (safety && !types.has('fault_injection')) addGap(id, 'missing_fault_injection', ['B', 'C', 'D'].includes(ex.asil) ? 'high' : 'medium', 'Safety/diagnostic requirement (ASIL ' + ex.asil + ') has no fault-injection test', 'Add signal timeout, implausible value, out-of-range voltage, open/short tests');\n    ex.expected_results.forEach(e => {\n      if (!e.signal) return; C.eoTotal++;\n      if (!mine.some(t => t.expected.some(x => normTok(x.signal) === normTok(e.signal)))) { C.eoMiss++; addGap(id, 'expected_result_not_checked', 'medium', 'No test checks the expected output on ' + e.signal, 'Assert ' + e.signal + ' in at least one test'); }\n    });\n    ex.signals.forEach(s => {\n      if (!mine.some(t => t.stimulus.concat(t.expected).some(x => normTok(x.signal) === normTok(s.name)))) addGap(id, 'signal_not_exercised', 'low', 'Signal ' + s.name + ' is declared but not used by any test', '');\n    });\n  });\n\n  // 3. test-case integrity\n  active.forEach(t => {\n    const r = reqById[t.req_id];\n    const declared = new Set();\n    if (r) { const ex = r.extraction; ex.signals.forEach(s => declared.add(normTok(s.name))); ex.operating_conditions.forEach(c => c.signal && declared.add(normTok(c.signal))); ex.expected_results.forEach(e => e.signal && declared.add(normTok(e.signal))); ex.boundary_conditions.forEach(b => b.signal && declared.add(normTok(b.signal))); }\n    if (!t.expected.length) t.flags.push('no_expected_result');\n    if (!t.stimulus.length && !t.preconditions.length) t.flags.push('no_stimulus_or_precondition');\n    t.stimulus.concat(t.expected).forEach(x => {\n      if (!x.signal) { t.flags.push('step_without_signal'); return; }\n      const k = normTok(x.signal);\n      if (dict.size) { if (!dict.has(k)) t.flags.push('signal_not_in_dictionary:' + x.signal); }\n      else if (declared.size && !declared.has(k)) t.flags.push('signal_not_in_requirement:' + x.signal);\n    });\n    t.flags = Array.from(new Set(t.flags));\n    if (t.flags.length) addGap(t.req_id, 'test_case_quality', t.flags.some(f => f.startsWith('no_expected') || f.startsWith('signal_not_in_dictionary')) ? 'high' : 'medium', t.tc_id + ': ' + t.flags.join(', '), 'Review / fix this test case');\n  });\n\n  gaps.sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity]);\n  const pct = (t, m) => t ? Math.round(100 * (t - m) / t) : null;\n  const covered = reqs.filter(r => (byReq[r.req_id] || []).length > 0).length;\n  const metrics = {\n    requirements: reqs.length, test_cases_total: tcs.length, test_cases_active: active.length, duplicates_removed: tcs.length - active.length,\n    requirement_coverage_pct: pct(reqs.length, reqs.length - covered),\n    expected_result_coverage_pct: pct(C.eoTotal, C.eoMiss),\n    boundary_coverage_pct: pct(C.bTotal, C.bMiss),\n    negative_case_coverage_pct: pct(C.condTotal, C.condMiss),\n    gaps_high: gaps.filter(g => g.severity === 'high').length, gaps_medium: gaps.filter(g => g.severity === 'medium').length, gaps_low: gaps.filter(g => g.severity === 'low').length\n  };\n  const traceability = reqs.map(r => { const m = byReq[r.req_id] || []; return { req_id: r.req_id, title: r.extraction.title, type: r.extraction.requirement_type, asil: r.extraction.asil, test_cases: m.map(t => t.tc_id), test_types: Array.from(new Set(m.map(t => t.type))) }; });\n  return { test_cases: tcs, gaps, duplicates: dups, metrics, traceability };\n}\n\nconst a = $('Analyze').first().json;\nconst cfg = $('Config').first().json;\nconst doc = $('Prepare Input').first().json;\nlet proposals = [];\ntry { proposals = $('Parse Gap Output').all().map(i => i.json); } catch (e) { proposals = []; }\n\n// base test cases (original extraction) + AI-proposed gap fillers\nconst reqById = {}; a.requirements.forEach(r => reqById[r.req_id] = r);\nconst base = flatten(a.requirements);\nconst counters = {}; base.forEach(t => counters[t.req_id] = Math.max(counters[t.req_id] || 0, t.seq));\nconst extra = [];\nproposals.filter(p => p.ok).forEach(p => {\n  const ex = reqById[p.req_id].extraction;\n  p.test_cases.forEach(t => {\n    counters[p.req_id] = (counters[p.req_id] || 0) + 1;\n    extra.push({ ...t, tc_id: 'TC-' + p.req_id + '-' + String(counters[p.req_id]).padStart(2, '0'), seq: counters[p.req_id], req_id: p.req_id,\n      origin: 'gap_analysis', ecu: ex.ecu.join('/'), req_type: ex.requirement_type, asil: ex.asil });\n  });\n});\nconst opts = { dupThreshold: Number(cfg.dup_threshold) || 0.8, signalDictionary: doc.signal_dictionary || [] };\nconst fin = analyze(a.requirements, base.concat(extra), opts);\nconst proposedKept = fin.test_cases.filter(t => t.origin === 'gap_analysis' && !t.duplicate_of).length;\n\n// CSV export (one row per test case)\nconst esc = v => { const s = String(v === null || v === undefined ? '' : v).replace(/\"/g, '\"\"'); return /[\",\\n]/.test(s) ? '\"' + s + '\"' : s; };\nconst stim = t => t.stimulus.map(s => s.signal + '=' + s.value + (s.unit ? ' ' + s.unit : '') + (s.wait_ms !== null ? ' (wait ' + s.wait_ms + ' ms)' : '')).join(' ; ');\nconst expd = t => t.expected.map(e => e.signal + '=' + e.value + (e.tolerance ? ' ' + e.tolerance : '') + (e.within_ms !== null ? ' within ' + e.within_ms + ' ms' : '')).join(' ; ');\nconst head = ['TC_ID', 'REQ_ID', 'Title', 'Type', 'Priority', 'ECU', 'ASIL', 'Preconditions', 'Stimulus', 'Expected', 'Pass_criteria', 'HIL_notes', 'Origin', 'Status', 'Duplicate_of', 'Flags'];\nconst rows = fin.test_cases.map(t => [t.tc_id, t.req_id, t.title, t.type, t.priority, t.ecu, t.asil, t.preconditions.join(' ; '), stim(t), expd(t), t.pass_criteria, t.hil_notes, t.origin, t.status, t.duplicate_of || '', t.flags.join(' ; ')]);\nconst csv = [head].concat(rows).map(r => r.map(esc).join(',')).join('\\n');\n\nconst m = fin.metrics;\nconst md = ['# Test generation report: ' + doc.source_name, '',\n  '- Requirements: ' + m.requirements + ' | Test cases: ' + m.test_cases_active + ' active (' + m.duplicates_removed + ' duplicates, ' + proposedKept + ' AI-proposed gap fillers)',\n  '- Requirement coverage: ' + m.requirement_coverage_pct + '% | Expected-result coverage: ' + m.expected_result_coverage_pct + '% | Boundary coverage: ' + m.boundary_coverage_pct + '% | Negative-case coverage: ' + m.negative_case_coverage_pct + '%',\n  '- Open gaps: ' + m.gaps_high + ' high, ' + m.gaps_medium + ' medium, ' + m.gaps_low + ' low (before gap-fill: ' + a.gaps.length + ' in total)', '',\n  '## Top open gaps'].concat(fin.gaps.slice(0, 15).map(g => '- [' + g.severity + '] ' + g.req_id + ' / ' + g.check + ': ' + g.detail)).join('\\n');\n\nreturn [{ json: {\n  source_name: doc.source_name,\n  summary: { ...m, ai_proposed_kept: proposedKept, gaps_before_gap_fill: a.gaps.length, gap_fill_ran: proposals.length > 0, gap_fill_failures: proposals.filter(p => !p.ok).map(p => p.req_id + ': ' + p.error) },\n  test_cases: fin.test_cases, traceability: fin.traceability, gaps: fin.gaps, duplicates: fin.duplicates,\n  extraction_errors: a.requirements.filter(r => !r.parse_ok).map(r => ({ req_id: r.req_id, errors: r.errors })),\n  csv, report_markdown: md\n} }];"
+      },
+      "id": "44ab690b-be0b-49f7-bd57-02f3c11e96b3",
+      "name": "Finalize Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "1413f2a9-28e0-4743-9483-8ee8b551b910",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2300,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Setup (cloud LLM version)\n1. Open **Config**: set `default_provider` (openai, gemini, grok, groq, mistral, deepseek, openrouter, ollama or custom) and paste the matching API key. Leave `default_model` empty to use the provider's default, or type any model name.\n2. All providers are called through their OpenAI-compatible `/chat/completions` endpoint, so no other node changes.\n3. **Manual Trigger** runs the built-in sample. Webhook JSON: `{\"document_text\": \"...\", \"signal_dictionary\": [\"VBatt\"], \"provider\": \"gemini\", \"model\": \"gemini-2.5-flash\"}` (provider/model optional). Or upload a PDF in multipart field `data`.\n4. Do not share/export this workflow with keys in Config. For production, move keys to n8n credentials or a secrets store.",
+        "height": 300,
+        "width": 460,
+        "color": 4
+      },
+      "id": "329a266d-42e6-4a42-be55-13ef5cf10cc8",
+      "name": "Note: Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1000,
+        -360
+      ],
+      "height": 340,
+      "width": 520
+    },
+    {
+      "parameters": {
+        "content": "## Automated checks (Analyze / Finalize)\n- Requirement coverage + traceability matrix\n- Duplicate / near-duplicate test cases (Jaccard on signal=value pairs)\n- Missing: positive, negative, boundary (at/below/above limit), timing, fault-injection (ASIL/diagnostic), expected-result and operating-condition coverage\n- Signal checks against dictionary / requirement\n- Duplicate or undefined requirement IDs, ambiguities\n- Gap-fill pass: LLM proposes only the missing tests, then everything is re-analysed",
+        "height": 300,
+        "width": 520,
+        "color": 5
+      },
+      "id": "d7c7a2cd-1c6c-47d5-8b26-4365fa748d92",
+      "name": "Note: Checks",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        320,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const cfg = $input.first().json;\n\n// All of these expose an OpenAI-compatible POST {base}/chat/completions\nconst PROVIDERS = {\n  openai:     { url: 'https://api.openai.com/v1',                              model: 'gpt-4.1-mini',            key: cfg.openai_api_key },\n  gemini:     { url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash',        key: cfg.gemini_api_key },\n  grok:       { url: 'https://api.x.ai/v1',                                    model: 'grok-4',                  key: cfg.xai_api_key },\n  groq:       { url: 'https://api.groq.com/openai/v1',                         model: 'llama-3.3-70b-versatile', key: cfg.groq_api_key },\n  mistral:    { url: 'https://api.mistral.ai/v1',                              model: 'mistral-large-latest',    key: cfg.mistral_api_key },\n  deepseek:   { url: 'https://api.deepseek.com/v1',                            model: 'deepseek-chat',           key: cfg.deepseek_api_key },\n  openrouter: { url: 'https://openrouter.ai/api/v1',                           model: 'openai/gpt-4.1-mini',     key: cfg.openrouter_api_key },\n  ollama:     { url: 'http://localhost:11434/v1',                              model: 'llama3.1:8b',             key: 'ollama' },\n  custom:     { url: String(cfg.custom_base_url || '').replace(/\\/+$/, ''),    model: '',                        key: cfg.custom_api_key }\n};\nconst ALIAS = { xai: 'grok', 'x.ai': 'grok', google: 'gemini', 'google-gemini': 'gemini', chatgpt: 'openai' };\n\nlet provider = String(cfg.provider || cfg.default_provider || 'openai').toLowerCase().trim();\nprovider = ALIAS[provider] || provider;\nconst p = PROVIDERS[provider];\nif (!p) throw new Error('Unknown provider \"' + provider + '\". Use one of: ' + Object.keys(PROVIDERS).join(', '));\n\nconst model = String(cfg.model || cfg.default_model || p.model || '').trim();\nif (!model) throw new Error('No model set for provider \"' + provider + '\". Fill default_model in the Config node.');\nif (!p.url) throw new Error('No base URL for provider \"' + provider + '\". Fill custom_base_url in the Config node.');\nconst key = String(p.key || '').trim();\nif (!key) throw new Error('No API key for provider \"' + provider + '\". Paste it into the matching *_api_key field in the Config node.');\n\n// OpenAI reasoning models (o-series, gpt-5*) reject a custom temperature -> omit it for them\nconst sendTemperature = !/^(o\\d|gpt-5)/i.test(model);\n\nconst out = { ...cfg, provider, model, llm_base_url: p.url, llm_api_key: key, send_temperature: sendTemperature };\n['openai_api_key','gemini_api_key','xai_api_key','groq_api_key','mistral_api_key','deepseek_api_key','openrouter_api_key','custom_api_key','default_model','default_provider','custom_base_url'].forEach(k => delete out[k]);\nreturn [{ json: out }];"
+      },
+      "id": "4d1b3ad4-ec44-4108-91d0-206a83d4e18e",
+      "name": "Resolve Provider",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        100,
+        140
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Has File?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has File?": {
+      "main": [
+        [
+          {
+            "node": "Extract From PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract From PDF": {
+      "main": [
+        [
+          {
+            "node": "Prepare Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Sample Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample Input": {
+      "main": [
+        [
+          {
+            "node": "Prepare Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Input": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Resolve Provider",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Requirements": {
+      "main": [
+        [
+          {
+            "node": "LLM: Extract Test Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM: Extract Test Cases": {
+      "main": [
+        [
+          {
+            "node": "Parse LLM Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse LLM Output": {
+      "main": [
+        [
+          {
+            "node": "Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze": {
+      "main": [
+        [
+          {
+            "node": "Gaps to Fill?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Gap Prompts": {
+      "main": [
+        [
+          {
+            "node": "LLM: Fill Gaps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM: Fill Gaps": {
+      "main": [
+        [
+          {
+            "node": "Parse Gap Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gap Output": {
+      "main": [
+        [
+          {
+            "node": "Finalize Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Report": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gaps to Fill?": {
+      "main": [
+        [
+          {
+            "node": "Build Gap Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalize Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Provider": {
+      "main": [
+        [
+          {
+            "node": "Split Requirements",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}
